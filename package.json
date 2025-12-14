@@ -1,5 +1,5 @@
 {
-  "name": "tidal-miyajima",
+  "name": "miyajima-tide",
   "version": "1.0.0",
   "description": "JavaScript library for calculating tidal height at Miyajima (Itsukushima) using harmonic analysis based on textbook equations",
   "type": "module",
@@ -14,7 +14,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/tsuchim/tidal-miyajima.git"
+    "url": "https://github.com/tsuchim/miyajima-tide.git"
   },
   "keywords": [
     "tide",
@@ -28,8 +28,8 @@
   ],
   "author": "tsuchim",
   "license": "MIT",
-  "homepage": "https://github.com/tsuchim/tidal-miyajima",
+  "homepage": "https://github.com/tsuchim/miyajima-tide",
   "bugs": {
-    "url": "https://github.com/tsuchim/tidal-miyajima/issues"
+    "url": "https://github.com/tsuchim/miyajima-tide/issues"
   }
 }

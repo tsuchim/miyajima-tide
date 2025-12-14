@@ -1,56 +1,60 @@
 # Miyajima Tide Library (Itsukushima Tide)
 
-宮島・厳島神社大鳥居周辺の潮位を、JavaScriptで計算するための軽量ライブラリです。  
-ブラウザ上で動作し、サーバを必要としないため、Webアプリ・展示・観光向けコンテンツなど、さまざまな用途に組み込むことができます。
+A lightweight JavaScript library for calculating tidal levels around the Great Torii Gate of Itsukushima Shrine in Miyajima, Hiroshima, Japan.
+
+This library runs entirely in the browser and does not require any server-side processing, making it suitable for integration into a wide range of applications such as websites, exhibitions, tourism tools, and educational projects.
 
 ---
 
-## このライブラリの目的
+## Purpose
 
-厳島神社の大鳥居は、**大野瀬戸（おおのせと）**に面した湾内に位置しており、  
-潮位によって「歩いて近づける姿」と「海に浮かぶ姿」が大きく変わります。
+The Great Torii Gate of Itsukushima Shrine stands in the coastal waters of **Ōno Seto**, a strait adjacent to Miyajima Island.  
+Its appearance changes dramatically with the tide: at low tide it can be approached on foot, while at high tide it appears to float on the sea.
 
-本ライブラリは、
+The purpose of this library is to:
 
-- 宮島・厳島神社大鳥居周辺の潮位を  
-- 教科書ベースの潮汐計算式と調和定数を用いて  
-- **JavaScriptのみで計算**し  
-- Webサイトやアプリ、展示コンテンツ等に**簡単に組み込める形で提供する**
-
-ことを目的としています。
+- Calculate tidal levels around the Torii Gate area
+- Use textbook-based tidal harmonic analysis and published tidal constants
+- Perform all calculations in JavaScript
+- Provide a reusable and embeddable component for various applications
 
 ---
 
-## 背景
+## Background
 
-本プロジェクトは、**広島県のコンペティションを通じたご縁**をきっかけに着想されました。
+This project originated from an encounter at a **Hiroshima Prefecture–related competition**, where the idea of using technology to enhance the experience of Miyajima was discussed.
 
-当時は諸条件が整わず実装に至りませんでしたが、  
-改めて「宮島を技術で盛り上げる」「観光・教育・創作に使える基盤を作る」  
-という目的のもと、今回ライブラリとして形にしました。
-
----
-
-## 特徴
-
-- サーバレス（GitHub Pages 等の静的ホスティングで動作）
-- ブラウザ上で完結（計算はすべてクライアント側）
-- 教科書に基づく潮汐調和解析モデル
-- 宮島（厳島）向けに調整された調和定数を使用
-- 商用・非商用を問わず利用可能（MIT License）
+At that time, the implementation was not feasible.  
+This library is the result of revisiting that idea and developing it as a reusable technical foundation for applications related to Miyajima.
 
 ---
 
-## 想定用途
+## Features
 
-- 観光サイトでの「今の鳥居の見え方」表示
-- 満潮・干潮に合わせた案内アプリ
-- 展示・サイネージ・教育用途
-- 個人・研究・商用アプリへの組み込み
+- Fully client-side, serverless operation
+- No backend or API required
+- Based on standard tidal harmonic calculation formulas
+- Includes tidal constants specifically for Itsukushima (Miyajima)
+- Suitable for commercial and non-commercial use
 
 ---
 
-## 使い方（概要）
+## Demo
+
+A demo application is available via **GitHub Pages**.  
+Using GitHub Pages is **not required** to use this library; it is provided only as a convenient demonstration.
+
+(Replace the URL below with your actual Pages URL.)
+
+```
+
+https://<username>.github.io/<repository>/
+
+````
+
+---
+
+## Usage (Overview)
 
 ```js
 import { MiyajimaTide } from "./tide-lib.js";
@@ -58,13 +62,36 @@ import { MiyajimaTide } from "./tide-lib.js";
 const tide = new MiyajimaTide();
 const heightCm = tide.heightCmAt(new Date());
 
+console.log(heightCm);
+````
+
+See `index.html` for a complete example.
+
+---
+
+## License
+
+MIT License
+
+This software may be used, modified, and distributed freely, including in commercial applications.
+
+---
+
+## Message
+
+Miyajima is a place where nature, history, and culture are closely intertwined.
+It is our hope that this library will serve as a foundation for applications, visualizations, research, and creative projects related to Miyajima, and help encourage wider use and appreciation of the area.
+
+Contributions and reuse are welcome.
+
+---
 console.log(heightCm);```
 
 ---
 
 ## デモ
 
-[宮島潮位計算アプリ](https://tsuchim.github.io/tidal-miyajima/) で、リアルタイムで潮位を確認できます。
+[宮島潮位計算アプリ](https://tsuchim.github.io/miyajima-tide/) で、リアルタイムで潮位を確認できます。
 
 ---
 
@@ -74,7 +101,7 @@ console.log(heightCm);```
 
 ```html
 <script type="module">
-  import { MiyajimaTide } from "https://raw.githubusercontent.com/tsuchim/tidal-miyajima/main/tide-lib.js";
+  import { MiyajimaTide } from "https://raw.githubusercontent.com/tsuchim/miyajima-tide/main/tide-lib.js";
   
   const tide = new MiyajimaTide();
   const height = tide.heightCmAt(new Date());
@@ -85,8 +112,8 @@ console.log(heightCm);```
 ### ローカルでの使用
 
 ```bash
-git clone https://github.com/tsuchim/tidal-miyajima.git
-cd tidal-miyajima
+git clone https://github.com/tsuchim/miyajima-tide.git
+cd miyajima-tide
 ```
 
 その後、`index.html` をブラウザで開くか、ローカルサーバで実行してください。
@@ -170,7 +197,7 @@ series.forEach(p => {
 
 ## 貢献
 
-バグ報告、機能提案、プルリクエストなどは、[GitHub Issues](https://github.com/tsuchim/tidal-miyajima/issues) でお受けしています。
+バグ報告、機能提案、プルリクエストなどは、[GitHub Issues](https://github.com/tsuchim/miyajima-tide/issues) でお受けしています。
 
 ---
 
