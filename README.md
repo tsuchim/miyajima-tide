@@ -59,27 +59,28 @@ https://<username>.github.io/<repository>/
 - **No implicit local time / JST conversion is performed inside the library.**
 - **GitHub Pages demo uses JST for convenience.** The demo UI treats user input as **JST** and performs an explicit **JST → UTC** conversion before calling the library.
 
-If you need to convert a JST wall-clock time to UTC in your own app, do it explicitly (same approach as the demo):
+If you need to convert a JST wall-clock date/time to UTC in your own app, do it explicitly (same approach as the demo):
 
 ```js
-// "YYYY-MM-DDTHH:mm" (interpreted as JST) -> Date (UTC instant)
-function parseDatetimeLocalAsJSTToUTC(v) {
-  const [datePart, timePart] = String(v).split("T");
-  const [y, m, d] = datePart.split("-").map(Number);
-  const [hh, mi] = timePart.split(":").map(Number);
-  return new Date(Date.UTC(y, m - 1, d, hh - 9, mi, 0, 0));
+// "YYYY-MM-DD" (interpreted as JST 00:00) -> Date (UTC instant)
+function parseDateAsJstMidnightToUTC(dateStr) {
+  const [y, m, d] = String(dateStr).split("-").map(Number);
+  // JST 00:00 is UTC 15:00 (previous day)
+  return new Date(Date.UTC(y, m - 1, d, -9, 0, 0, 0));
 }
 ```
 
 ## Usage (Overview)
 
 ```js
-import { MiyajimaTide } from "./tide-lib.js";
+import { MiyajimaTide, heightCmAtUTC } from "./tide-lib.js";
 
 const tide = new MiyajimaTide();
 const heightCm = tide.heightCmAtUTC(new Date());
+const height2 = heightCmAtUTC(new Date());
 
 console.log(heightCm);
+console.log(height2);
 ````
 
 See `index.html` for a complete example.
@@ -132,11 +133,8 @@ cd miyajima-tide
 その後、`index.html` をブラウザで開くか、ローカルサーバで実行してください。
 
 ```bash
-# Python 3
-python -m http.server 8000
-
-# Node.js
-npx http-server
+# Node.js (recommended)
+npm run serve
 ```
 
 ---
