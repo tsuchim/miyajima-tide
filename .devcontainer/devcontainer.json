@@ -15,14 +15,7 @@
         "eamodio.gitlens"
       ],
       "settings": {
-        "editor.formatOnSave": true,
-        "editor.defaultFormatter": "esbenp.prettier-vscode",
-        "[javascript]": {
-          "editor.defaultFormatter": "esbenp.prettier-vscode"
-        },
-        "[typescript]": {
-          "editor.defaultFormatter": "esbenp.prettier-vscode"
-        }
+        "editor.formatOnSave": true
       }
     }
   },
@@ -34,7 +27,7 @@
       "onAutoForward": "notify"
     },
     "8200": {
-      "label": "Miyajima Tide Demo (Python http.server)",
+      "label": "Miyajima Tide Demo (Node.js serve script)",
       "onAutoForward": "notify"
     }
   }
