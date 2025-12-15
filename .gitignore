@@ -23,6 +23,8 @@ build/
 *.swp
 *.swo
 *~
+*.code-workspace
+workspace.code-workspace
 
 # OS
 .DS_Store

@@ -52,17 +52,35 @@ https://<username>.github.io/<repository>/
 
 ````
 
----
+
+## Time Handling
+
+- **Library (tide-lib) API is UTC-only.** All public methods accept `Date` values that represent a **UTC instant** and the core logic is computed strictly in UTC.
+- **No implicit local time / JST conversion is performed inside the library.**
+- **GitHub Pages demo uses JST for convenience.** The demo UI treats user input as **JST** and performs an explicit **JST → UTC** conversion before calling the library.
+
+If you need to convert a JST wall-clock date/time to UTC in your own app, do it explicitly (same approach as the demo):
+
+```js
+// "YYYY-MM-DD" (interpreted as JST 00:00) -> Date (UTC instant)
+function parseDateAsJstMidnightToUTC(dateStr) {
+  const [y, m, d] = String(dateStr).split("-").map(Number);
+  // JST 00:00 is UTC 15:00 (previous day)
+  return new Date(Date.UTC(y, m - 1, d, -9, 0, 0, 0));
+}
+```
 
 ## Usage (Overview)
 
 ```js
-import { MiyajimaTide } from "./tide-lib.js";
+import { MiyajimaTide, heightCmAtUTC } from "./tide-lib.js";
 
 const tide = new MiyajimaTide();
-const heightCm = tide.heightCmAt(new Date());
+const heightCm = tide.heightCmAtUTC(new Date());
+const height2 = heightCmAtUTC(new Date());
 
 console.log(heightCm);
+console.log(height2);
 ````
 
 See `index.html` for a complete example.
@@ -84,10 +102,6 @@ It is our hope that this library will serve as a foundation for applications, vi
 
 Contributions and reuse are welcome.
 
----
-console.log(heightCm);```
-
----
 
 ## デモ
 
@@ -104,7 +118,7 @@ console.log(heightCm);```
   import { MiyajimaTide } from "https://raw.githubusercontent.com/tsuchim/miyajima-tide/main/tide-lib.js";
   
   const tide = new MiyajimaTide();
-  const height = tide.heightCmAt(new Date());
+    const height = tide.heightCmAtUTC(new Date());
   console.log(`潮位: ${height.toFixed(1)} cm`);
 </script>
 ```
@@ -119,11 +133,8 @@ cd miyajima-tide
 その後、`index.html` をブラウザで開くか、ローカルサーバで実行してください。
 
 ```bash
-# Python 3
-python -m http.server 8000
-
-# Node.js
-npx http-server
+# Node.js (recommended)
+npm run serve
 ```
 
 ---
@@ -142,24 +153,24 @@ const tide = new MiyajimaTide(params);
 
 #### メソッド
 
-##### `heightCmAt(date: Date): number`
+##### `heightCmAtUTC(dateUtc: Date): number`
 
-指定の日時における潮位を計算します。
+指定の日時(UTC)における潮位を計算します。
 
 ```js
-const height = tide.heightCmAt(new Date());
+const height = tide.heightCmAtUTC(new Date());
 console.log(height); // cm単位の潮位
 ```
 
-##### `seriesCm(startDate: Date, minutes: number, stepMinutes?: number): Array`
+##### `seriesCmAtUTC(startDateUtc: Date, minutes: number, stepMinutes?: number): Array`
 
-指定の期間の潮位系列を計算します。
+指定の期間(UTC)の潮位系列を計算します。戻り値の各要素は `{ tUTC: Date, cm: number }` です。
 
 ```js
-const series = tide.seriesCm(new Date(), 24 * 60, 10);
+const series = tide.seriesCmAtUTC(new Date(), 24 * 60, 10);
 // 今から24時間、10分刻みで潮位を計算
 series.forEach(p => {
-  console.log(`${p.t.toLocaleString()}: ${p.cm.toFixed(1)} cm`);
+  console.log(`${p.tUTC.toISOString()}: ${p.cm.toFixed(1)} cm`);
 });
 ```
 
