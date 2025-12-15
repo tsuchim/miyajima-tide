@@ -3,26 +3,157 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>宮島（厳島）潮位・簡易計算</title>
+  <title>宮島（厳島）潮位デモ（10分ごと）</title>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 16px; }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    input { padding: 6px 8px; }
-    button { padding: 6px 10px; }
-    pre { background: #f6f6f6; padding: 10px; overflow: auto; }
+    :root {
+      color-scheme: light dark;
+      --bg: #0b1220;
+      --card: #101a2f;
+      --text: #e8edf6;
+      --muted: #aab6cf;
+      --border: rgba(255, 255, 255, 0.12);
+      --accent: #67b7ff;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f7f8fb;
+        --card: #ffffff;
+        --text: #152033;
+        --muted: #55657d;
+        --border: rgba(0, 0, 0, 0.12);
+        --accent: #1565c0;
+      }
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 20px 16px 12px;
+      max-width: 980px;
+      margin: 0 auto;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 20px;
+      letter-spacing: 0.2px;
+    }
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 0 16px 24px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: end;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .controls-left {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: end;
+    }
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    input, button {
+      font: inherit;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+    }
+    button {
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.06);
+    }
+    button:hover { background: rgba(255, 255, 255, 0.10); }
+    button:active { transform: translateY(1px); }
+
+    .summary {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 6px 0 10px;
+      user-select: none;
+    }
+    .summary strong { color: var(--text); font-weight: 600; }
+
+    .chartWrap {
+      position: relative;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.14);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 360px;
+    }
+    .hint {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    a { color: var(--accent); }
   </style>
 </head>
 <body>
-  <h1>宮島（厳島）潮位・簡易計算</h1>
+  <header>
+    <h1>宮島（厳島）潮位デモ（10分ごと）</h1>
+    <p>日付（JST）を選ぶと、その日の推算潮位を10分刻みでグラフ表示します（全てブラウザ内で計算、外部APIなし）。</p>
+  </header>
 
-  <div class="row">
-    <label>日時（JST）:</label>
-    <input id="dt" type="datetime-local" />
-    <button id="calc">計算</button>
-  </div>
+  <main>
+    <section class="card">
+      <div class="controls">
+        <div class="controls-left">
+          <label>
+            日付（JST）
+            <input id="date" type="date" />
+          </label>
+          <button id="today" type="button">今日</button>
+        </div>
+        <button id="download" type="button">CSVダウンロード</button>
+      </div>
 
-  <p id="result">—</p>
-  <pre id="day">—</pre>
+      <div id="summary" class="summary">—</div>
+
+      <div class="chartWrap" aria-label="潮位グラフ">
+        <canvas id="chart"></canvas>
+      </div>
+
+      <div class="hint">
+        マウス/タップで値を確認できます。計算は簡易モデルです。ライブラリはUTC入力のため、デモ側でJST→UTC変換しています。
+      </div>
+    </section>
+  </main>
 
   <script type="module">
     import { MiyajimaTide } from "./tide-lib.js";
@@ -32,73 +163,297 @@
     // デモは「入力=JST」とみなし、UTCへ明示的に変換してからライブラリ(UTC API)を呼ぶ。
     const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
-    // 初期値：いま
-    const dt = document.getElementById("dt");
-    const nowUtc = new Date();
-    dt.value = formatDatetimeLocalJSTFromUTC(nowUtc);
+    const dateInput = document.getElementById("date");
+    const summaryEl = document.getElementById("summary");
+    const canvas = document.getElementById("chart");
 
-    function formatDatetimeLocalJSTFromUTC(dateUtc) {
-      // Date(UTC instant) -> "YYYY-MM-DDTHH:mm" (JST)
-      const jst = new Date(dateUtc.getTime() + JST_OFFSET_MS);
+    let currentSeries = [];
+    let hoverIndex = -1;
+    let lastDrawKey = "";
+
+    function format2(n) {
+      return String(n).padStart(2, "0");
+    }
+
+    function todayJstDateString() {
+      const nowUtc = new Date();
+      const jst = new Date(nowUtc.getTime() + JST_OFFSET_MS);
       const yyyy = jst.getUTCFullYear();
-      const mm = String(jst.getUTCMonth() + 1).padStart(2, "0");
-      const dd = String(jst.getUTCDate()).padStart(2, "0");
-      const hh = String(jst.getUTCHours()).padStart(2, "0");
-      const mi = String(jst.getUTCMinutes()).padStart(2, "0");
-      return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+      const mm = format2(jst.getUTCMonth() + 1);
+      const dd = format2(jst.getUTCDate());
+      return `${yyyy}-${mm}-${dd}`;
     }
 
-    function parseDatetimeLocalAsJSTToUTC(v) {
-      // datetime-local はタイムゾーン情報を持たない。
-      // このデモでは「入力値はJST」と決め打ちし、JSTの壁時計時刻 -> UTC instant に変換する。
-      const [datePart, timePart] = String(v).split("T");
-      const [y, m, d] = datePart.split("-").map(Number);
-      const [hh, mi] = timePart.split(":").map(Number);
-      return new Date(Date.UTC(y, m - 1, d, hh - 9, mi, 0, 0));
-    }
-
-    function jstMidnightUtcFromDatetimeLocalValue(v) {
-      const [datePart] = String(v).split("T");
-      const [y, m, d] = datePart.split("-").map(Number);
-      // JST 00:00 は UTC 15:00(前日)
+    function parseDateAsJstMidnightToUTC(dateStr) {
+      // dateStr: "YYYY-MM-DD" (JST)
+      const [y, m, d] = String(dateStr).split("-").map(Number);
+      // JST 00:00 -> UTC 15:00 (前日)
       return new Date(Date.UTC(y, m - 1, d, -9, 0, 0, 0));
-    }
-
-    function formatJstDateTime(dateUtc) {
-      const jst = new Date(dateUtc.getTime() + JST_OFFSET_MS);
-      const yyyy = jst.getUTCFullYear();
-      const mm = String(jst.getUTCMonth() + 1).padStart(2, "0");
-      const dd = String(jst.getUTCDate()).padStart(2, "0");
-      const hh = String(jst.getUTCHours()).padStart(2, "0");
-      const mi = String(jst.getUTCMinutes()).padStart(2, "0");
-      return `${yyyy}-${mm}-${dd} ${hh}:${mi} JST`;
     }
 
     function formatJstTimeHHMM(dateUtc) {
       const jst = new Date(dateUtc.getTime() + JST_OFFSET_MS);
-      const hh = String(jst.getUTCHours()).padStart(2, "0");
-      const mm = String(jst.getUTCMinutes()).padStart(2, "0");
-      return `${hh}:${mm}`;
+      return `${format2(jst.getUTCHours())}:${format2(jst.getUTCMinutes())}`;
     }
 
-    function renderDayText(baseDateTimeJstValue) {
-      // 当日0:00(JST)から24h、10分刻み
-      const day0Utc = jstMidnightUtcFromDatetimeLocalValue(baseDateTimeJstValue);
-      const series = tide.seriesCmAtUTC(day0Utc, 24 * 60, 10);
-
-      // ざっくり見やすいように整形
-      return series.map(p => {
-        return `${formatJstTimeHHMM(p.tUTC)}  ${p.cm.toFixed(1)} cm`;
-      }).join("\n");
+    function formatJstDateLabel(dateStr) {
+      const [y, m, d] = String(dateStr).split("-").map(Number);
+      return `${y}年${m}月${d}日（JST）`;
     }
 
-    document.getElementById("calc").addEventListener("click", () => {
-      const dUtc = parseDatetimeLocalAsJSTToUTC(dt.value);
-      const cm = tide.heightCmAtUTC(dUtc);
-      document.getElementById("result").textContent =
-        `${formatJstDateTime(dUtc)} の推算潮位: ${cm.toFixed(1)} cm（Z0基準）`;
+    function computeSeriesForJstDay(dateStr) {
+      // 00:00〜23:50 (10分刻み) = 144点
+      const startUtc = parseDateAsJstMidnightToUTC(dateStr);
+      return tide.seriesCmAtUTC(startUtc, 24 * 60 - 10, 10);
+    }
 
-      document.getElementById("day").textContent = renderDayText(dt.value);
+    function findExtrema(series) {
+      let min = series[0];
+      let max = series[0];
+      for (const p of series) {
+        if (p.cm < min.cm) min = p;
+        if (p.cm > max.cm) max = p;
+      }
+      return { min, max };
+    }
+
+    function cmRange(series) {
+      let min = Infinity;
+      let max = -Infinity;
+      for (const p of series) {
+        if (p.cm < min) min = p.cm;
+        if (p.cm > max) max = p.cm;
+      }
+      return { min, max };
+    }
+
+    function toCsv(series) {
+      const header = "time_jst,height_cm\n";
+      const rows = series.map(p => `${formatJstTimeHHMM(p.tUTC)},${p.cm.toFixed(1)}`).join("\n");
+      return header + rows + "\n";
+    }
+
+    function downloadCsv(filename, text) {
+      const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function setSummary(dateStr, series) {
+      if (!series.length) {
+        summaryEl.textContent = "—";
+        return;
+      }
+      const { min, max } = findExtrema(series);
+      const range = cmRange(series);
+      const hovered = series[hoverIndex];
+      const hoveredText = hovered
+        ? `　|　<strong>${formatJstTimeHHMM(hovered.tUTC)}</strong>：<strong>${hovered.cm.toFixed(1)} cm</strong>`
+        : "";
+      summaryEl.innerHTML =
+        `<strong>${formatJstDateLabel(dateStr)}</strong>` +
+        `　|　最小 <strong>${min.cm.toFixed(1)} cm</strong>（${formatJstTimeHHMM(min.tUTC)}）` +
+        `　|　最大 <strong>${max.cm.toFixed(1)} cm</strong>（${formatJstTimeHHMM(max.tUTC)}）` +
+        `　|　レンジ ${(range.max - range.min).toFixed(1)} cm` +
+        hoveredText;
+    }
+
+    function cssVar(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function drawChart(dateStr, series) {
+      // Avoid redundant draws
+      const rect = canvas.getBoundingClientRect();
+      const drawKey = `${dateStr}|${rect.width.toFixed(0)}x${rect.height.toFixed(0)}|${hoverIndex}`;
+      if (drawKey === lastDrawKey) return;
+      lastDrawKey = drawKey;
+
+      const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+      const w = Math.max(320, Math.floor(rect.width));
+      const h = Math.max(240, Math.floor(rect.height));
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      const ctx = canvas.getContext("2d", { alpha: false });
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const bg = cssVar("--card");
+      const border = cssVar("--border");
+      const text = cssVar("--text");
+      const muted = cssVar("--muted");
+      const accent = cssVar("--accent");
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+
+      if (!series.length) return;
+
+      const padL = 56;
+      const padR = 14;
+      const padT = 14;
+      const padB = 32;
+      const plotW = w - padL - padR;
+      const plotH = h - padT - padB;
+
+      const range = cmRange(series);
+      const yPad = Math.max(10, (range.max - range.min) * 0.08);
+      const yMin = range.min - yPad;
+      const yMax = range.max + yPad;
+
+      function xAt(i) {
+        return padL + (i / (series.length - 1)) * plotW;
+      }
+      function yAt(cm) {
+        const t = (cm - yMin) / (yMax - yMin);
+        return padT + (1 - t) * plotH;
+      }
+
+      // Grid + Y labels
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = border;
+      ctx.fillStyle = muted;
+      ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      const gridN = 4;
+      for (let g = 0; g <= gridN; g++) {
+        const t = g / gridN;
+        const y = padT + t * plotH;
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(w - padR, y);
+        ctx.stroke();
+        const val = (yMax - t * (yMax - yMin)).toFixed(0);
+        ctx.fillText(`${val} cm`, padL - 8, y);
+      }
+
+      // X labels (every 2 hours)
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      const stepsPerHour = 6; // 10min step
+      for (let hour = 0; hour <= 24; hour += 2) {
+        const x = hour === 24 ? (padL + plotW) : xAt(Math.min(series.length - 1, hour * stepsPerHour));
+        ctx.beginPath();
+        ctx.moveTo(x, padT);
+        ctx.lineTo(x, padT + plotH);
+        ctx.stroke();
+        const label = hour === 24 ? "24:00" : `${format2(hour)}:00`;
+        ctx.fillText(label, x, padT + plotH + 8);
+      }
+
+      // Line
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = accent;
+      ctx.beginPath();
+      for (let i = 0; i < series.length; i++) {
+        const p = series[i];
+        const x = xAt(i);
+        const y = yAt(p.cm);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Hover marker
+      if (hoverIndex >= 0 && hoverIndex < series.length) {
+        const p = series[hoverIndex];
+        const x = xAt(hoverIndex);
+        const y = yAt(p.cm);
+
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = border;
+        ctx.beginPath();
+        ctx.moveTo(x, padT);
+        ctx.lineTo(x, padT + plotH);
+        ctx.stroke();
+
+        ctx.fillStyle = accent;
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Title
+      ctx.fillStyle = text;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+      ctx.fillText(`推算潮位（10分刻み）: ${formatJstDateLabel(dateStr)}`, padL, 10);
+    }
+
+    function update() {
+      const dateStr = dateInput.value;
+      if (!dateStr) return;
+      currentSeries = computeSeriesForJstDay(dateStr);
+      hoverIndex = -1;
+      lastDrawKey = "";
+      setSummary(dateStr, currentSeries);
+      drawChart(dateStr, currentSeries);
+    }
+
+    // UI init
+    dateInput.value = todayJstDateString();
+    update();
+
+    dateInput.addEventListener("change", update);
+    document.getElementById("today").addEventListener("click", () => {
+      dateInput.value = todayJstDateString();
+      update();
+    });
+
+    document.getElementById("download").addEventListener("click", () => {
+      const dateStr = dateInput.value || todayJstDateString();
+      if (!currentSeries.length) currentSeries = computeSeriesForJstDay(dateStr);
+      downloadCsv(`miyajima-tide_${dateStr}.csv`, toCsv(currentSeries));
+    });
+
+    function updateHoverFromClientX(clientX) {
+      const rect = canvas.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const padL = 56;
+      const padR = 14;
+      const plotW = rect.width - padL - padR;
+      if (plotW <= 0) return;
+      if (x < padL || x > rect.width - padR || !currentSeries.length) {
+        if (hoverIndex !== -1) {
+          hoverIndex = -1;
+          lastDrawKey = "";
+          setSummary(dateInput.value, currentSeries);
+          drawChart(dateInput.value, currentSeries);
+        }
+        return;
+      }
+      const t = (x - padL) / plotW;
+      const i = Math.round(t * (currentSeries.length - 1));
+      const next = Math.max(0, Math.min(currentSeries.length - 1, i));
+      if (next !== hoverIndex) {
+        hoverIndex = next;
+        lastDrawKey = "";
+        setSummary(dateInput.value, currentSeries);
+        drawChart(dateInput.value, currentSeries);
+      }
+    }
+
+    canvas.addEventListener("mousemove", (e) => updateHoverFromClientX(e.clientX));
+    canvas.addEventListener("mouseleave", () => updateHoverFromClientX(-9999));
+    canvas.addEventListener("touchstart", (e) => {
+      if (e.touches && e.touches[0]) updateHoverFromClientX(e.touches[0].clientX);
+    }, { passive: true });
+    canvas.addEventListener("touchmove", (e) => {
+      if (e.touches && e.touches[0]) updateHoverFromClientX(e.touches[0].clientX);
+    }, { passive: true });
+
+    window.addEventListener("resize", () => {
+      lastDrawKey = "";
+      drawChart(dateInput.value, currentSeries);
     });
   </script>
 </body>
