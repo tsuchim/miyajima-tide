@@ -22,6 +22,7 @@
 
 const DEG = Math.PI / 180;
 const MINUTE_MS = 60_000;
+const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 
 function mod360(deg) {
@@ -151,7 +152,7 @@ function assertFiniteNumber(n, name) {
 }
 
 function heightCmAtUTCWithDayCtx(dateUtc, params, dayCtx) {
-  const tHours = (dateUtc.getTime() - dayCtx.midnightMs) / 3_600_000;
+  const tHours = (dateUtc.getTime() - dayCtx.midnightMs) / HOUR_MS;
   const args = advanceArgs(dayCtx.base, tHours);
 
   let eta = params.Z0_cm;
