@@ -51,7 +51,8 @@ function safeResolve(urlPath) {
   const withoutQuery = decoded.split("?")[0].split("#")[0];
   const normalized = path.normalize(withoutQuery).replace(/^([/\\])+/, "");
   const full = path.resolve(rootDir, normalized);
-  if (!full.startsWith(rootDir + path.sep) && full !== rootDir) return null;
+  const isInRoot = full === rootDir || full.startsWith(rootDir + path.sep);
+  if (!isInRoot) return null;
   return full;
 }
 
@@ -89,6 +90,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "HEAD") return send(res, 200, "", { "Content-Type": contentType(fullPath) });
     return send(res, 200, buf, { "Content-Type": contentType(fullPath) });
   } catch (e) {
+    // NOTE: クライアントには詳細を返さず、サーバ側ログだけ出す（開発時の調査用）
+    // eslint-disable-next-line no-console
+    console.error("[serve] request error", { method: req.method, url: req.url }, e);
     return send(res, 500, "Internal Server Error");
   }
 });
