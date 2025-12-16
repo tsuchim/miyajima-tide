@@ -3,6 +3,7 @@
 // - η(t)=Z0+Σ f_i H_i cos(V_i(t)+u_i-κ_i)
 // - V_i(t)=a1*τ+a2*s+a3*h+a4*p+a5*N (+ a6*p′; this demo ignores p′)
 // - All inputs are UTC instants (Date)
+// NOTE: Here τ is treated as Doodson/Schureman "mean lunar time" (τ = T + h − s).
 
 const DEG = Math.PI / 180;
 const MINUTE_MS = 60_000;
@@ -55,15 +56,23 @@ function astroArgsAtUTMidnight(dateUTC) {
 
 // UT 0:00 から tHours 進める
 function advanceArgs({ s, h, p, N }, tHours) {
-  // Mean solar angle at Greenwich (deg), where 0° at 0:00 UTC and +15°/hour.
-  // NOTE: Earlier versions followed a reconstructed PDF that applied a 180° offset.
-  // That offset is arbitrary and must NOT be applied when using published κ values.
-  const tau = mod360(15.0 * tHours);
+  // Fundamental angles at time t.
+  const sNow = mod360(s + 0.54901652 * tHours);
+  const hNow = mod360(h + 0.04106864 * tHours);
+  const pNow = mod360(p + 0.00464181 * tHours);
+
+  // Mean solar angle at Greenwich (deg), 0° at 0:00 UTC and +15°/hour (mod 360).
+  const T = mod360(15.0 * tHours);
+
+  // Doodson/Schureman-style mean lunar time (τ):
+  // τ = T + h − s  (so that dτ/dt ≈ 15 + dh/dt − ds/dt ≈ 14.492°/h)
+  // This makes the standard constituent arguments compact, e.g. M2 = 2τ.
+  const tau = mod360(T + hNow - sNow);
   return {
     tau,
-    s: mod360(s + 0.54901652 * tHours),
-    h: mod360(h + 0.04106864 * tHours),
-    p: mod360(p + 0.00464181 * tHours),
+    s: sNow,
+    h: hNow,
+    p: pNow,
     N, // 日内変化は無視（教科書近似）
   };
 }
@@ -112,12 +121,14 @@ export const ITSUKUSHIMA_PARAMS_JCG_RAW = Object.freeze({
   phaseConvention: "sin", // "sin" | "cos"
   Z0_cm: 200.0,
   constituents: Object.freeze([
-    { id: "O1", H_cm: 24.0, kappa_deg: 201.0, a: [1, -2, 1, 0, 0] },
-    { id: "P1", H_cm: 10.3, kappa_deg: 219.0, a: [1, 0, -1, 0, 0] },
-    { id: "K1", H_cm: 31.0, kappa_deg: 219.0, a: [1, 0, 1, 0, 0] },
-    { id: "M2", H_cm: 103.0, kappa_deg: 277.0, a: [2, -2, 2, 0, 0] },
-    { id: "S2", H_cm: 40.0, kappa_deg: 310.0, a: [2, 0, 0, 0, 0] },
-    { id: "K2", H_cm: 10.9, kappa_deg: 310.0, a: [2, 0, 2, 0, 0] },
+    // a = [a1, a2, a3, a4, a5] for V = a1*τ + a2*s + a3*h + a4*p + a5*N
+    // (τ is mean lunar time; see advanceArgs()).
+    { id: "O1", H_cm: 24.0, kappa_deg: 201.0, a: [1, -1, 0, 0, 0] }, // τ − s
+    { id: "P1", H_cm: 10.3, kappa_deg: 219.0, a: [1, 1, -2, 0, 0] }, // τ + s − 2h
+    { id: "K1", H_cm: 31.0, kappa_deg: 219.0, a: [1, 1, 0, 0, 0] }, // τ + s
+    { id: "M2", H_cm: 103.0, kappa_deg: 277.0, a: [2, 0, 0, 0, 0] }, // 2τ
+    { id: "S2", H_cm: 40.0, kappa_deg: 310.0, a: [2, 2, -2, 0, 0] }, // 2τ + 2s − 2h (= 2T)
+    { id: "K2", H_cm: 10.9, kappa_deg: 310.0, a: [2, 2, 0, 0, 0] }, // 2τ + 2s
   ]),
 });
 
@@ -128,13 +139,14 @@ export const ITSUKUSHIMA_PARAMS = Object.freeze({
   phaseConvention: "cos", // "sin" | "cos"
   Z0_cm: 200.0,
   constituents: Object.freeze([
-    // a = [a1, a2, a3, a4, a5] for V = a1*tau + a2*s + a3*h + a4*p + a5*N
-    { id: "O1", H_cm: 24.0, kappa_deg: 160.3, a: [1, -2, 1, 0, 0] },
-    { id: "P1", H_cm: 10.3, kappa_deg: 177.3, a: [1, 0, -1, 0, 0] },
-    { id: "K1", H_cm: 31.0, kappa_deg: 354.0, a: [1, 0, 1, 0, 0] },
-    { id: "M2", H_cm: 103.0, kappa_deg: 11.4, a: [2, -2, 2, 0, 0] },
-    { id: "S2", H_cm: 40.0, kappa_deg: 45.3, a: [2, 0, 0, 0, 0] },
-    { id: "K2", H_cm: 10.9, kappa_deg: 39.2, a: [2, 0, 2, 0, 0] },
+    // a = [a1, a2, a3, a4, a5] for V = a1*τ + a2*s + a3*h + a4*p + a5*N
+    // (τ is mean lunar time; see advanceArgs()).
+    { id: "O1", H_cm: 24.0, kappa_deg: 160.3, a: [1, -1, 0, 0, 0] }, // τ − s
+    { id: "P1", H_cm: 10.3, kappa_deg: 177.3, a: [1, 1, -2, 0, 0] }, // τ + s − 2h
+    { id: "K1", H_cm: 31.0, kappa_deg: 354.0, a: [1, 1, 0, 0, 0] }, // τ + s
+    { id: "M2", H_cm: 103.0, kappa_deg: 11.4, a: [2, 0, 0, 0, 0] }, // 2τ
+    { id: "S2", H_cm: 40.0, kappa_deg: 45.3, a: [2, 2, -2, 0, 0] }, // 2τ + 2s − 2h (= 2T)
+    { id: "K2", H_cm: 10.9, kappa_deg: 39.2, a: [2, 2, 0, 0, 0] }, // 2τ + 2s
   ]),
 });
 
