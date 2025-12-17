@@ -1,14 +1,18 @@
 // tide-lib.js (ES Module)
-// 教科書(55)(56)式：η(t)=Z0+Σ f_i H_i cos([V_i(t)+u_i]-κ_i)
-// - 公開APIは UTC Date のみ
-// - V_i(t) は天文角の線形結合（ωt を別途足さない）
-// - N は昇交点経度 Ω（減少）
-// - a5*N を含む一般形を実装（現行6分潮は a5=0）
+// PDF: "Harmonic Tide Prediction Model (Reconstructed)"
+// - η(t)=Z0+Σ f_i H_i cos(V_i(t)+u_i-κ_i)
+// - V_i(t)=a1*τ+a2*s+a3*h+a4*p+a5*N (+ a6*p′; this demo ignores p′)
+// - All inputs are UTC instants (Date)
+// NOTE: Here τ is treated as Doodson/Schureman "mean lunar time" (τ = T + h − s).
 
 const DEG = Math.PI / 180;
 const MINUTE_MS = 60_000;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
+
+// J2000 epoch (Jan 1, 2000 12:00 UTC) - standard astronomical reference time
+// Used as the base epoch for all astronomical argument approximations.
+const J2000_12_UTC_MS = Date.UTC(2000, 0, 1, 12, 0, 0, 0);
 
 function mod360(deg) {
   let x = deg % 360;
@@ -28,30 +32,22 @@ function utcMidnightMs(dateUTC) {
   );
 }
 
-function dayOfYearUTC(dateUTC) {
-  const startMs = Date.UTC(dateUTC.getUTCFullYear(), 0, 1);
-  return Math.floor((utcMidnightMs(dateUTC) - startMs) / DAY_MS) + 1;
+function daysSinceJ2000_12UTC(msUtc) {
+  return (msUtc - J2000_12_UTC_MS) / DAY_MS;
 }
 
-// 教科書の補助項 L = floor((Y+3)/4) - 500
-function L_correction(year) {
-  return Math.floor((year + 3) / 4) - 500;
-}
-
-// 教科書(27)-(30): UT 0:00 における天文角
+// PDF 6.x: UT 0:00 における天文角（線形近似）
 function astroArgsAtUTMidnight(dateUTC) {
-  const year = dateUTC.getUTCFullYear();
-  const D = dayOfYearUTC(dateUTC);
-  const L = L_correction(year);
+  const midMs = utcMidnightMs(dateUTC);
+  const d = daysSinceJ2000_12UTC(midMs);
 
-  const y = year - 2000;
-  const d = D + L;
+  // Mean longitudes (deg). Rates are in deg/day.
+  const s = 218.3167 + 13.1763965 * d; // Moon (deg/day)
+  const h = 279.974 + 0.985647 * d; // Sun  (deg/day)
+  const p = 83.353 + 0.111404 * d; // lunar perigee (deg/day)
 
-  const s = 211.728 + 129.38471 * y + 13.176396 * d;
-  const h = 279.974 - 0.23871 * y + 0.985647 * d;
-  const p = 83.298 + 40.66229 * y + 0.111404 * d;
-  // N = 昇交点経度 Ω（減少）
-  const N = 125.071 - 19.32812 * y - 0.052954 * d;
+  // Node angle N (as written in the reconstructed PDF's simplified form)
+  const N = 125.044 - 0.052954 * d;
 
   return {
     s: mod360(s),
@@ -61,16 +57,32 @@ function astroArgsAtUTMidnight(dateUTC) {
   };
 }
 
-// UT 0:00 から tHours 進める
-function advanceArgs({ s, h, p, N }, tHours) {
-  // 教科書規約：T(0:00UT)=180°
-  const T = mod360(180.0 + 15.0 * tHours);
+// Advance angles from UT 0:00 by tHours.
+function advanceArgs({ s, h, p, N }, tHours, params) {
+  // Fundamental angles at time t.
+  const sNow = mod360(s + 0.54901652 * tHours);
+  const hNow = mod360(h + 0.04106864 * tHours);
+  const pNow = mod360(p + 0.00464181 * tHours);
+
+  // Mean solar angle at Greenwich (deg), 0° at 0:00 UTC and +15°/hour (mod 360).
+  const T = mod360(15.0 * tHours);
+
+  // Doodson/Schureman-style mean lunar time (τ):
+  // τ = T + h − s  (so that dτ/dt ≈ 15 + dh/dt − ds/dt ≈ 14.492°/h)
+  //
+  // Some harmonic-constant tables define phases using a local reference meridian and/or a shifted τ origin.
+  // To support those sources in a principled way, we allow:
+  // - `referenceLongitude_deg`: east-positive degrees added to τ (e.g. station longitude).
+  // - `tauOffset_deg`: a constant offset added to τ (e.g. 180° in some published conventions).
+  const referenceLongitude = params?.referenceLongitude_deg ?? 0.0;
+  const tauOffset = params?.tauOffset_deg ?? 0.0;
+  const tau = mod360(T + hNow - sNow + referenceLongitude + tauOffset);
   return {
-    T,
-    s: mod360(s + 0.54901652 * tHours),
-    h: mod360(h + 0.04106864 * tHours),
-    p: mod360(p + 0.00464181 * tHours),
-    N, // 日内変化は無視（教科書近似）
+    tau,
+    s: sNow,
+    h: hNow,
+    p: pNow,
+    N, // Daily variation is ignored (textbook approximation).
   };
 }
 
@@ -78,31 +90,25 @@ function advanceArgs({ s, h, p, N }, tHours) {
 function nodalFU(id, Ndeg) {
   const COSN = cosd(Ndeg);
   const COS2 = cosd(2 * Ndeg);
-  const COS3 = cosd(3 * Ndeg);
   const SINN = sind(Ndeg);
   const SIN2 = sind(2 * Ndeg);
-  const SIN3 = sind(3 * Ndeg);
 
   switch (id) {
     case "O1":
+      // Small-angle nodal corrections (degrees), consistent with standard NOAA/JMA practice.
       return {
-        f: 1.0089 + 0.1871 * COSN - 0.0147 * COS2 + 0.0006 * COS3,
-        u: -8.86 * SINN + 0.68 * SIN2 - 0.07 * SIN3,
+        f: 1.0 + 0.188 * COSN + 0.014 * COS2,
+        u: 1.73 * SINN + 0.043 * SIN2,
       };
     case "K1":
       return {
-        f: 1.0060 + 0.1150 * COSN - 0.0088 * COS2 + 0.0016 * COS3,
-        u: -12.94 * SINN + 1.34 * SIN2 - 0.19 * SIN3,
+        f: 1.006 + 0.115 * COSN - 0.009 * COS2,
+        u: -0.505 * SINN - 0.020 * SIN2,
       };
     case "M2":
       return {
         f: 1.0004 - 0.0373 * COSN + 0.0002 * COS2,
         u: -2.14 * SINN,
-      };
-    case "K2":
-      return {
-        f: 1.0241 + 0.2863 * COSN + 0.0083 * COS2 - 0.0015 * COS3,
-        u: -17.74 * SINN + 0.68 * SIN2 - 0.04 * SIN3,
       };
     default:
       return { f: 1.0, u: 0.0 };
@@ -110,24 +116,42 @@ function nodalFU(id, Ndeg) {
 }
 
 export const ITSUKUSHIMA_PARAMS = Object.freeze({
-  name: "Itsukushima (Miyajima)",
+  name: "Itsukushima (Miyajima) - JCG harmonic constants",
+  // Values transcribed from the Hydrographic Dept. (JCG) sheet (H[cm], κ[deg], Z0[cm]).
+  // This is a first-principles harmonic prediction model: the library does NOT depend on external sites.
+  //
+  // NOTE:
+  // - The sheet does not explicitly state the phase convention / reference meridian.
+  // - JCG's own web predictor output for this station is best matched with:
+  //   `phaseConvention: "cos"`, `referenceLongitude_deg: station longitude (east+)`, `tauOffset_deg: 180`.
+  // - Other datasets may use different conventions; the library exposes these knobs for compatibility.
+  phaseConvention: "cos", // "sin" | "cos"
+  referenceLongitude_deg: 132 + 19 / 60, // 132°19′E
+  tauOffset_deg: 180.0,
   Z0_cm: 200.0,
   constituents: Object.freeze([
-    // a = [a1, a2, a3, a4, a5]
-    { id: "O1", H_cm: 24.0, kappa_deg: 201.0, a: [1, -2, 1, 0, 0] },
-    { id: "P1", H_cm: 10.3, kappa_deg: 219.0, a: [1, 0, -1, 0, 0] },
-    { id: "K1", H_cm: 31.0, kappa_deg: 219.0, a: [1, 0, 1, 0, 0] },
-    { id: "M2", H_cm: 103.0, kappa_deg: 277.0, a: [2, -2, 2, 0, 0] },
-    { id: "S2", H_cm: 40.0, kappa_deg: 310.0, a: [2, 0, 0, 0, 0] },
-    { id: "K2", H_cm: 10.9, kappa_deg: 310.0, a: [2, 0, 2, 0, 0] },
+    // a = [a1, a2, a3, a4, a5] for V = a1*τ + a2*s + a3*h + a4*p + a5*N
+    // (τ is mean lunar time; see advanceArgs()).
+    { id: "O1", H_cm: 24.0, kappa_deg: 201.0, a: [1, -1, 0, 0, 0] }, // τ − s
+    { id: "P1", H_cm: 10.3, kappa_deg: 219.0, a: [1, 1, -2, 0, 0] }, // τ + s − 2h
+    { id: "K1", H_cm: 31.0, kappa_deg: 219.0, a: [1, 1, 0, 0, 0] }, // τ + s
+    { id: "M2", H_cm: 103.0, kappa_deg: 277.0, a: [2, 0, 0, 0, 0] }, // 2τ
+    { id: "S2", H_cm: 40.0, kappa_deg: 310.0, a: [2, 2, -2, 0, 0] }, // 2τ + 2s − 2h (= 2T)
+    { id: "K2", H_cm: 10.9, kappa_deg: 310.0, a: [2, 2, 0, 0, 0] }, // 2τ + 2s
   ]),
 });
 
 function heightCmAtUTCWithDayCtx(dateUtc, params, dayCtx) {
   const tHours = (dateUtc.getTime() - dayCtx.midnightMs) / HOUR_MS;
-  const args = advanceArgs(dayCtx.base, tHours);
+  const args = advanceArgs(dayCtx.base, tHours, params);
 
   let eta = params.Z0_cm;
+  const phaseConvention = params.phaseConvention ?? "cos";
+  
+  // Validate phase convention
+  if (phaseConvention !== "sin" && phaseConvention !== "cos") {
+    throw new Error(`Invalid phaseConvention: "${phaseConvention}". Must be "sin" or "cos".`);
+  }
 
   for (let i = 0; i < params.constituents.length; i++) {
     const c = params.constituents[i];
@@ -135,14 +159,21 @@ function heightCmAtUTCWithDayCtx(dateUtc, params, dayCtx) {
     const [a1, a2, a3, a4, a5] = c.a;
 
     const V =
-      a1 * args.T +
+      a1 * args.tau +
       a2 * args.s +
       a3 * args.h +
       a4 * args.p +
       a5 * args.N;
 
-    const phase = mod360(V + u - c.kappa_deg);
-    eta += f * c.H_cm * Math.cos(phase * DEG);
+    // v0: optional equilibrium argument offset (in degrees); default = 0
+    // phase = V + v0 + u - κ (where u is nodal correction, κ is phase lag)
+    const v0 = c.v0_deg ?? 0.0;
+    const phase = mod360(V + v0 + u - c.kappa_deg);
+    if (phaseConvention === "sin") {
+      eta += f * c.H_cm * Math.sin(phase * DEG);
+    } else {
+      eta += f * c.H_cm * Math.cos(phase * DEG);
+    }
   }
   return eta;
 }
